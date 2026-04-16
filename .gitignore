@@ -1,0 +1,124 @@
+# ========================
+# DATA (never upload raw data to GitHub)
+# ========================
+data/raw/
+data/processed/
+data/ood/
+*.csv
+*.tsv
+*.json
+*.parquet
+*.h5
+*.hdf5
+
+# ========================
+# MODEL CHECKPOINTS
+# ========================
+*.pt
+*.pth
+*.ckpt
+*.pkl
+*.pickle
+models/checkpoints/
+experiments/results/
+
+# ========================
+# PYTHON
+# ========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+MANIFEST
+
+# ========================
+# VIRTUAL ENVIRONMENTS
+# ========================
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ========================
+# JUPYTER NOTEBOOKS
+# ========================
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+*.ipynb_checkpoints
+
+# ========================
+# EXPERIMENT TRACKING
+# ========================
+mlruns/
+mlflow.db
+wandb/
+.wandb/
+lightning_logs/
+
+# ========================
+# IDE / EDITOR
+# ========================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ========================
+# DOCKER
+# ========================
+.dockerignore
+
+# ========================
+# LOGS & TEMP FILES
+# ========================
+*.log
+*.tmp
+*.temp
+logs/
+tmp/
+
+# ========================
+# SECRETS (CRITICAL)
+# ========================
+.env
+.env.local
+secrets.yaml
+config/secrets/
+*.key
+*.pem
+
+# ========================
+# PAPER / LATEX
+# ========================
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.fdb_latexmk
+paper/*.fls
+paper/*.log
+paper/*.out
+paper/*.synctex.gz
+paper/*.toc
+ia_prob_env/
+experiments/
