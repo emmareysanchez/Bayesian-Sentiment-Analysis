@@ -266,13 +266,37 @@ class BayesianMLP(PyroModule):
 
         self.fc1 = PyroModule[nn.Linear](input_dim, hidden_dim)
         fc1_std = prior_std / math.sqrt(max(input_dim, 1)) if fan_in_scaled_prior else prior_std
-        self.fc1.weight = PyroSample(dist.Normal(0.0, fc1_std).expand([hidden_dim, input_dim]).to_event(2))
-        self.fc1.bias = PyroSample(dist.Normal(0.0, prior_std).expand([hidden_dim]).to_event(1))
+
+        # Register buffers so priors follow the model to CPU/CUDA/MPS correctly.
+        self.register_buffer("fc1_weight_loc", torch.tensor(0.0))
+        self.register_buffer("fc1_weight_scale", torch.tensor(fc1_std))
+        self.register_buffer("fc1_bias_loc", torch.tensor(0.0))
+        self.register_buffer("fc1_bias_scale", torch.tensor(prior_std))
+        self.register_buffer("out_weight_loc", torch.tensor(0.0))
+        self.register_buffer("out_weight_scale", torch.tensor(
+            prior_std / math.sqrt(max(hidden_dim, 1)) if fan_in_scaled_prior else prior_std
+        ))
+        self.register_buffer("out_bias_loc", torch.tensor(0.0))
+        self.register_buffer("out_bias_scale", torch.tensor(prior_std))
+
+        self.fc1.weight = PyroSample(
+            lambda self: dist.Normal(self.fc1_weight_loc, self.fc1_weight_scale)
+            .expand([hidden_dim, input_dim]).to_event(2)
+        )
+        self.fc1.bias = PyroSample(
+            lambda self: dist.Normal(self.fc1_bias_loc, self.fc1_bias_scale)
+            .expand([hidden_dim]).to_event(1)
+        )
 
         self.out = PyroModule[nn.Linear](hidden_dim, 2)
-        out_std = prior_std / math.sqrt(max(hidden_dim, 1)) if fan_in_scaled_prior else prior_std
-        self.out.weight = PyroSample(dist.Normal(0.0, out_std).expand([2, hidden_dim]).to_event(2))
-        self.out.bias = PyroSample(dist.Normal(0.0, prior_std).expand([2]).to_event(1))
+        self.out.weight = PyroSample(
+            lambda self: dist.Normal(self.out_weight_loc, self.out_weight_scale)
+            .expand([2, hidden_dim]).to_event(2)
+        )
+        self.out.bias = PyroSample(
+            lambda self: dist.Normal(self.out_bias_loc, self.out_bias_scale)
+            .expand([2]).to_event(1)
+        )
 
     def forward(self, x: torch.Tensor, y: Optional[torch.Tensor] = None) -> torch.Tensor:
         x = self.relu(self.fc1(x))
@@ -389,6 +413,12 @@ def train_bnn(
         raise ValueError(f"Unsupported guide='{cfg.guide}'. Only 'diag' is implemented.")
 
     guide = AutoDiagonalNormal(model)
+
+    # Force guide parameter initialization on the target device using one train batch.
+    x0, y0 = next(iter(train_loader))
+    x0, y0 = x0.to(device), y0.to(device)
+    guide(x0, y0)
+
     svi = pyro.infer.SVI(
         model=model,
         guide=guide,
@@ -419,7 +449,7 @@ def train_bnn(
     if best_store_state is not None:
         pyro.clear_param_store()
         for key, value in best_store_state.items():
-            pyro.get_param_store()[key] = value.clone()
+            pyro.get_param_store()[key] = value.clone().to(device)
 
     return TrainingArtifacts(standardizer=scaler, model=model, guide=guide)
 
