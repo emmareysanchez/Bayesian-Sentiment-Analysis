@@ -25,11 +25,13 @@ class BayesianClassifier(PyroModule):
         self.relu = nn.ReLU()
 
     def forward(self, x, y=None):
-        # x es el vector concatenado [BERT, LDA]
+        # x is the concatenated feature vector [BERT, LDA]
         x = self.relu(self.fc1(x))
         logits = self.out(x)
-        
-        # Verosimilitud (Likelihood): Distribución Categórica para la clasificación
-        with pyro.plate("data", x.shape[0]):
-            obs = pyro.sample("obs", dist.Categorical(logits=logits), obs=y)
+
+        # Only create the observed categorical site during training/evaluation with labels
+        if y is not None:
+            with pyro.plate("data", x.shape[0]):
+                pyro.sample("obs", dist.Categorical(logits=logits), obs=y)
+
         return logits

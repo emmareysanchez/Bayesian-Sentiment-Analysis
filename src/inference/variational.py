@@ -34,10 +34,9 @@ class VariationalInference:
 
     def train_step(self, x_batch, y_batch):
         """
-        Realiza un paso de optimización y devuelve el valor de la pérdida (ELBO).
+        Performs one optimization step and returns the average ELBO loss per sample.
         """
-        # En Pyro, svi.step() se encarga de todo el proceso de backpropagation
-        loss = self.svi.step(x_batch, y_batch)
+        loss = self.svi.step(x_batch, y_batch.long())
         return loss / x_batch.shape[0]
 
     def evaluate_loss(self, data_loader):
