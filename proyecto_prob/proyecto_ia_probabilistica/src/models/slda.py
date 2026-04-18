@@ -127,9 +127,9 @@ class SupervisedHead(PyroModule):
 @dataclass
 class SLDAConfig:
     n_topics: int = 10
-    prior_std_w: float = 1.0
+    prior_std_w: float = 0.5
     prior_std_b: float = 1.0
-    lr: float = 1e-2
+    lr: float = 1e-3
     epochs: int = 30
     batch_size: int = 256
     patience: int = 5

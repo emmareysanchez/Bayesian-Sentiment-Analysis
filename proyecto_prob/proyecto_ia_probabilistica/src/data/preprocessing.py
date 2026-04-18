@@ -51,10 +51,16 @@ BERT_MODEL_NAME = "distilbert-base-uncased"
 BERT_BATCH_SIZE = 64
 BERT_MAX_LENGTH = 256
 
+AD_HOC_STOPWORDS = {
+    "monroe", "stanwyck", "barrymore", "grinch", "kelly", "ritchie", 
+    "al", "gore", "global", "warming", "columbo", "orson", "welles",
+    "movie", "film", "film", "story", "character", "actor", "scene"
+}
+
 TFIDF_CONFIG = dict(
-    max_features=10_000,
+    max_features=5_000,
     stop_words="english",
-    min_df=5,
+    min_df=50,
     max_df=0.7,
     ngram_range=(1, 2),
     sublinear_tf=True,
@@ -69,6 +75,9 @@ def clean_text(text: str) -> str:
     text = re.sub(r"<[^>]+>", " ", text)
     text = re.sub(r"http\S+|www\S+", " ", text)
     text = re.sub(r"[^a-z0-9\s\'\-]", " ", text)
+    words = text.split()
+    words = [w for w in words if w not in AD_HOC_STOPWORDS]
+    text = " ".join(words)
     text = re.sub(r"\s+", " ", text).strip()
     return text
 
