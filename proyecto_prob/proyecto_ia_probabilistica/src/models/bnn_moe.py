@@ -55,9 +55,9 @@ class BayesianMoEConfig:
     input_dim: int = 768
     hidden_dim: int = 128
     n_experts: int = 10
-    prior_std_w: float = 0.1
-    prior_std_b: float = 0.1
-    prior_std_het: float = 0.1
+    prior_std_w: float = 1.0
+    prior_std_b: float = 1.0
+    prior_std_het: float = 1.0
     use_heteroscedastic: bool = False
     fan_in_scaled_prior: bool = True
     hetero_samples: int = 8          # MC samples for the Gaussian noise on logits

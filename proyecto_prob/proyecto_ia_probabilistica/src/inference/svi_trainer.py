@@ -62,8 +62,8 @@ class SVITrainer:
 
     def _step(self, x, y, theta):
         if theta is None:
-            return self.svi.step(x, y)
-        return self.svi.step(x, theta, y)
+            return self.svi.step(x, y=y)
+        return self.svi.step(x, theta=theta, y=y)
 
     def fit(
         self,

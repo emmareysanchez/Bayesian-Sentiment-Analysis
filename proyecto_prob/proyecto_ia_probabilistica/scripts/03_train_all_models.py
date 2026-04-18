@@ -289,7 +289,7 @@ def main():
     ap.add_argument("--patience", type=int, default=5)
     ap.add_argument("--hidden-dim", type=int, default=128)
     ap.add_argument("--lr", type=float, default=1e-3)
-    ap.add_argument("--prior-std", type=float, default=0.1)
+    ap.add_argument("--prior-std", type=float, default=1.0)
     ap.add_argument("--n-topics", type=int, default=10)
     ap.add_argument("--mc-samples", type=int, default=100)
     ap.add_argument("--only", type=str, nargs="+", default=None,
