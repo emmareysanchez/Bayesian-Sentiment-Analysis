@@ -28,7 +28,7 @@ if str(ROOT) not in sys.path:
 os.chdir(ROOT)
 
 from src.evaluation.metrics import all_metrics, reliability_bins  # noqa: E402
-from src.evaluation.ood import ood_report  # noqa: E402
+from src.evaluation.ood import MahalanobisOOD, ood_report  # noqa: E402
 from src.evaluation.selective import compare_scores, risk_coverage_curve  # noqa: E402
 from src.utils.io import save_json, write_csv  # noqa: E402
 
@@ -58,15 +58,48 @@ def _max_softmax_unc(mean_probs: np.ndarray) -> np.ndarray:
     return 1.0 - mean_probs.max(axis=1)
 
 
+def _fit_mahalanobis() -> MahalanobisOOD:
+    """Fit Mahalanobis detector on train-split BERT embeddings."""
+    import json
+    bert = np.load("data/processed/bert_embeddings.npy")
+    labels = np.load("data/processed/labels.npy")
+    with open("data/processed/splits.json") as f:
+        splits = json.load(f)
+    train_idx = np.array(splits["train"])
+    detector = MahalanobisOOD()
+    detector.fit(bert[train_idx], labels[train_idx])
+    return detector
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--models-root", type=str, default="experiments/results/models")
     ap.add_argument("--out-dir", type=str, default="experiments/results/evaluation")
     ap.add_argument("--splits", type=str, nargs="+", default=["val", "test"])
+    ap.add_argument("--no-mahalanobis", action="store_true",
+                    help="Skip Mahalanobis OOD score (faster but less complete)")
     args = ap.parse_args()
 
     models_root = Path(args.models_root)
     out_dir = Path(args.out_dir); out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Fit Mahalanobis once; scores are model-independent (feature space)
+    mahal_detector = None
+    if not args.no_mahalanobis:
+        try:
+            import json as _json
+            bert_all = np.load("data/processed/bert_embeddings.npy")
+            labels_all = np.load("data/processed/labels.npy")
+            with open("data/processed/splits.json") as _f:
+                _splits = _json.load(_f)
+            ood_bert = np.load("data/ood/ood_embeddings.npy")
+            mahal_detector = _fit_mahalanobis()
+            mahal_score_test = mahal_detector.score(bert_all[np.array(_splits["test"])])
+            mahal_score_ood  = mahal_detector.score(ood_bert)
+            print(f"Mahalanobis fitted. test mean={mahal_score_test.mean():.1f}  ood mean={mahal_score_ood.mean():.1f}")
+        except Exception as e:
+            print(f"Warning: could not fit Mahalanobis detector: {e}")
+            mahal_detector = None
 
     model_dirs = sorted([d for d in models_root.iterdir() if d.is_dir()])
     if not model_dirs:
@@ -207,6 +240,10 @@ def main():
                             s[k] = d["uncertainty"][k]
                 return s
             id_s = _scores(id_data); ood_s = _scores(ood_data)
+            # Add Mahalanobis (same scores for all model seeds — feature-space only)
+            if mahal_detector is not None:
+                id_s["mahalanobis"] = mahal_score_test
+                ood_s["mahalanobis"] = mahal_score_ood
             rep = ood_report(id_s, ood_s)
             ood_scores_per_seed.append(rep)
 

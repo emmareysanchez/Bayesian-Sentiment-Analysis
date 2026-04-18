@@ -20,8 +20,8 @@ from pyro.optim import Adam
 @dataclass
 class SVITrainerConfig:
     lr: float = 1e-3
-    epochs: int = 25
-    patience: int = 5
+    epochs: int = 50
+    patience: int = 10
     mc_samples_eval: int = 100
     min_delta: float = 1e-4
 

@@ -4,7 +4,7 @@ Treat uncertainty as a score. Higher uncertainty on OOD than ID is what we want.
 """
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 from sklearn.metrics import average_precision_score, roc_auc_score
@@ -36,6 +36,39 @@ def fpr_at_tpr(score_id: np.ndarray, score_ood: np.ndarray, target_tpr: float = 
     th = np.quantile(score_ood, 1 - target_tpr)
     fpr = float((score_id >= th).mean())
     return fpr
+
+
+class MahalanobisOOD:
+    """Class-conditional Mahalanobis distance OOD detector (Lee et al. 2018).
+
+    Fit on training features + labels. Score = min over classes of
+    (x - μ_c)^T Σ^{-1} (x - μ_c), then negated so higher = more OOD.
+    """
+
+    def __init__(self, eps: float = 1e-6):
+        self.eps = eps
+        self.class_means_: Optional[np.ndarray] = None   # [C, D]
+        self.precision_: Optional[np.ndarray] = None      # [D, D]
+
+    def fit(self, X: np.ndarray, y: np.ndarray) -> "MahalanobisOOD":
+        classes = np.unique(y)
+        means = np.stack([X[y == c].mean(axis=0) for c in classes])   # [C, D]
+        # Pooled within-class covariance
+        centered = np.vstack([X[y == c] - means[i] for i, c in enumerate(classes)])
+        cov = np.cov(centered, rowvar=False) + self.eps * np.eye(X.shape[1])
+        self.class_means_ = means
+        self.precision_ = np.linalg.inv(cov)
+        return self
+
+    def score(self, X: np.ndarray) -> np.ndarray:
+        """Return per-sample Mahalanobis score (higher = more OOD)."""
+        dists = []
+        for mu in self.class_means_:
+            d = X - mu                                       # [N, D]
+            maha = np.einsum("nd,de,ne->n", d, self.precision_, d)
+            dists.append(maha)
+        min_dist = np.stack(dists, axis=1).min(axis=1)      # [N]
+        return min_dist                                      # higher = farther from any class
 
 
 def ood_report(

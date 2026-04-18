@@ -125,6 +125,9 @@ Entrena: determinista, MC-Dropout, BNN base, BNN+LDA concat, BNN-MoE (el nuestro
 python scripts/03_train_all_models.py --seeds 42 43 44
 ```
 
+Defaults actuales: `--epochs 50 --patience 10 --prior-std 2.0`.
+Para sobreescribir: `python scripts/03_train_all_models.py --seeds 42 43 44 --prior-std 0.5 --epochs 75`
+
 Guarda cada modelo en `experiments/results/models/<nombre>/seed_<S>/`.
 
 ### Paso 4 — Evaluación completa (E1-E7)
