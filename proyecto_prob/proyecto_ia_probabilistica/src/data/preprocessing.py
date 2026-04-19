@@ -36,7 +36,7 @@ from typing import List, Tuple
 import numpy as np
 import scipy.sparse as sp
 import torch
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
@@ -64,6 +64,14 @@ TFIDF_CONFIG = dict(
     max_df=0.7,
     ngram_range=(1, 2),
     sublinear_tf=True,
+)
+
+BOW_CONFIG = dict(
+    max_features=5_000,
+    stop_words="english",
+    min_df=50,
+    max_df=0.7,
+    ngram_range=(1, 1),   # unigrams only — LDA interprets word co-occurrence, not phrases
 )
 
 # -----------------------------
@@ -279,6 +287,7 @@ def run(
     typo_doc_rate: float,
     minority_ratio: float,
     seed: int,
+    skip_bert: bool = False,
 ) -> None:
     rng = np.random.default_rng(seed)
     random.seed(seed)
@@ -354,20 +363,36 @@ def run(
     # --- TF-IDF (fit on train only, no leakage) ---
     log.info("Building TF-IDF...")
     vec = TfidfVectorizer(**TFIDF_CONFIG)
-    vec.fit([id_texts[i] for i in splits["train"]])
+    train_texts_for_fit = [id_texts[i] for i in splits["train"]]
+    vec.fit(train_texts_for_fit)
     tfidf = vec.transform(id_texts)
     log.info(f"  TF-IDF shape: {tfidf.shape}")
 
+    # --- BOW counts (for LDA — integer counts, not TF-IDF) ---
+    log.info("Building BOW counts (for LDA)...")
+    bow_vec = CountVectorizer(**BOW_CONFIG)
+    bow_vec.fit(train_texts_for_fit)
+    bow = bow_vec.transform(id_texts)
+    log.info(f"  BOW shape: {bow.shape}")
+
     # --- BERT embeddings for in-distribution ---
-    log.info("Computing BERT embeddings (in-distribution)...")
-    emb_id = build_bert_embeddings(id_texts)
+    if skip_bert and (PROCESSED_DIR / "bert_embeddings.npy").exists():
+        log.info("Skipping BERT embeddings (--skip-bert and file exists).")
+        emb_id = np.load(PROCESSED_DIR / "bert_embeddings.npy")
+    else:
+        log.info("Computing BERT embeddings (in-distribution)...")
+        emb_id = build_bert_embeddings(id_texts)
 
     # --- OOD ---
     log.info("Loading OOD...")
     ood_texts, ood_sources = load_ood_samples(ood_size_per_source)
     ood_texts = [clean_text(t) for t in ood_texts]
-    log.info("Computing BERT embeddings (OOD)...")
-    emb_ood = build_bert_embeddings(ood_texts)
+    if skip_bert and (OOD_DIR / "ood_embeddings.npy").exists():
+        log.info("Skipping OOD BERT embeddings (--skip-bert and file exists).")
+        emb_ood = np.load(OOD_DIR / "ood_embeddings.npy")
+    else:
+        log.info("Computing BERT embeddings (OOD)...")
+        emb_ood = build_bert_embeddings(ood_texts)
 
     # --- Save ---
     log.info("Saving...")
@@ -375,6 +400,9 @@ def run(
     sp.save_npz(PROCESSED_DIR / "tfidf_matrix.npz", tfidf)
     with open(PROCESSED_DIR / "tfidf_vectorizer.pkl", "wb") as f:
         pickle.dump(vec, f)
+    sp.save_npz(PROCESSED_DIR / "bow_matrix.npz", bow)
+    with open(PROCESSED_DIR / "bow_vectorizer.pkl", "wb") as f:
+        pickle.dump(bow_vec, f)
     np.save(PROCESSED_DIR / "labels.npy", id_labels_noisy.astype(np.int64))
     np.save(PROCESSED_DIR / "true_labels.npy", id_labels_true.astype(np.int64))
     with open(PROCESSED_DIR / "splits.json", "w") as f:
@@ -383,9 +411,11 @@ def run(
     np.save(OOD_DIR / "ood_embeddings.npy", emb_ood.astype(np.float32))
     with open(OOD_DIR / "ood_metadata.json", "w") as f:
         json.dump({"sources": ood_sources, "n": len(ood_sources)}, f)
-    # Save OOD TF-IDF too (needed for sLDA on OOD)
+    # Save OOD TF-IDF and BOW (needed for sLDA on OOD)
     ood_tfidf = vec.transform(ood_texts)
     sp.save_npz(OOD_DIR / "ood_tfidf.npz", ood_tfidf)
+    ood_bow = bow_vec.transform(ood_texts)
+    sp.save_npz(OOD_DIR / "ood_bow.npz", ood_bow)
 
     # Config snapshot
     with open(PROCESSED_DIR / "config.json", "w") as f:
@@ -417,6 +447,8 @@ def main():
     p.add_argument("--minority-ratio", type=float, default=0.25,
                    help="Positive = minority_ratio * negative in train")
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--skip-bert", action="store_true",
+                   help="Reuse existing BERT embeddings if present (saves ~20 min)")
     args = p.parse_args()
     run(**vars(args))
 

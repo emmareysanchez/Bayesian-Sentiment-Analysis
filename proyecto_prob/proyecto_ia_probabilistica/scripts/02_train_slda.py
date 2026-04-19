@@ -24,7 +24,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 os.chdir(ROOT)
 
-from src.data.loader import load_ood, load_raw, load_tfidf, split_tfidf  # noqa: E402
+from src.data.loader import load_bow, load_ood, load_raw, split_tfidf  # noqa: E402
 from src.models.slda import AmortizedSLDA, SLDAConfig  # noqa: E402
 from src.utils.seed import set_seed  # noqa: E402
 
@@ -47,14 +47,14 @@ def main():
 
     # --- Load data ---
     raw = load_raw()
-    tfidf, vec = load_tfidf()
+    bow, vec = load_bow()
     splits = raw["splits"]
-    tfidf_splits = split_tfidf(tfidf, splits)
+    tfidf_splits = split_tfidf(bow, splits)   # reuse split helper, now on BOW counts
     y_train = raw["labels"][splits["train"]]
     y_val = raw["labels"][splits["val"]]
     y_test = raw["labels"][splits["test"]]
 
-    print(f"Train TF-IDF: {tfidf_splits['train'].shape}, pos={float((y_train==1).mean()):.3f}")
+    print(f"Train BOW: {tfidf_splits['train'].shape}, pos={float((y_train==1).mean()):.3f}")
 
     # --- Train ---
     cfg = SLDAConfig(
@@ -85,7 +85,7 @@ def main():
         np.save(out_dir / f"theta_{k}.npy", v)
     try:
         ood = load_ood()
-        theta_ood = slda.theta(ood["tfidf"])
+        theta_ood = slda.theta(ood["bow"])
         np.save(out_dir / "theta_ood.npy", theta_ood)
         print(f"  theta_ood: {theta_ood.shape}")
     except Exception as e:
@@ -93,7 +93,7 @@ def main():
 
     # --- Save model + diagnostics ---
     slda.save(out_dir)
-    feat_names = vec.get_feature_names_out()
+    feat_names = vec.get_feature_names_out()  # vec is now bow_vectorizer
     top_words = {str(k): ws for k, ws in slda.topics.top_words(feat_names, top_k=12).items()}
     topic_sent = slda.topic_sentiment(mc=200)
     with open(out_dir / "topic_words.json", "w") as f:

@@ -39,15 +39,27 @@ def load_tfidf(processed_dir: str | Path = PROCESSED_DIR) -> Tuple[sp.csr_matrix
     return X, vec
 
 
+def load_bow(processed_dir: str | Path = PROCESSED_DIR) -> Tuple[sp.csr_matrix, object]:
+    processed_dir = Path(processed_dir)
+    X = sp.load_npz(processed_dir / "bow_matrix.npz")
+    with open(processed_dir / "bow_vectorizer.pkl", "rb") as f:
+        vec = pickle.load(f)
+    return X, vec
+
+
 def load_ood(ood_dir: str | Path = OOD_DIR) -> Dict[str, np.ndarray]:
     ood_dir = Path(ood_dir)
     with open(ood_dir / "ood_metadata.json") as f:
         meta = json.load(f)
-    return {
+    result = {
         "bert": np.load(ood_dir / "ood_embeddings.npy"),
         "tfidf": sp.load_npz(ood_dir / "ood_tfidf.npz"),
         "sources": meta["sources"],
     }
+    bow_path = ood_dir / "ood_bow.npz"
+    if bow_path.exists():
+        result["bow"] = sp.load_npz(bow_path)
+    return result
 
 
 # -----------------------------
