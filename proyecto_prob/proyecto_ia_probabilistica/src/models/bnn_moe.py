@@ -128,6 +128,7 @@ class BayesianMoE(PyroModule):
         x: torch.Tensor,
         theta: Optional[torch.Tensor] = None,
         y: Optional[torch.Tensor] = None,
+        n_data: Optional[int] = None,
     ) -> torch.Tensor:
         """
         Args:
@@ -168,7 +169,9 @@ class BayesianMoE(PyroModule):
             logits = mu
 
         if y is not None:
-            with pyro.plate("data", B):
-                pyro.sample("obs", dist.Categorical(logits=logits), obs=y)
+            scale = n_data / B if n_data is not None else 1.0
+            with pyro.poutine.scale(scale=scale):
+                with pyro.plate("data", B):
+                    pyro.sample("obs", dist.Categorical(logits=logits), obs=y)
 
         return logits

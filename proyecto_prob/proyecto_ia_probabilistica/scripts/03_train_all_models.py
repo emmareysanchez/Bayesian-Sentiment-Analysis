@@ -289,15 +289,24 @@ def main():
     ap.add_argument("--patience", type=int, default=10)
     ap.add_argument("--hidden-dim", type=int, default=128)
     ap.add_argument("--lr", type=float, default=1e-3)
-    ap.add_argument("--prior-std", type=float, default=2.0)
+    ap.add_argument("--prior-std", type=float, default=1.0)
     ap.add_argument("--n-topics", type=int, default=10)
     ap.add_argument("--mc-samples", type=int, default=100)
     ap.add_argument("--only", type=str, nargs="+", default=None,
                     help="Subset of model names to train")
     ap.add_argument("--out-root", type=str, default="experiments/results/models")
+    ap.add_argument("--device", type=str, default=None,
+                    help="cuda / mps / cpu (auto-detect if omitted)")
     args = ap.parse_args()
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if args.device:
+        device = torch.device(args.device)
+    elif torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
     print(f"Device: {device}")
 
     raw = load_raw()

@@ -52,6 +52,7 @@ class SVITrainer:
         self.guide = guide
         self.cfg = cfg
         self.device = device
+        self.n_data: Optional[int] = None
 
         self.svi = SVI(
             model=model,
@@ -62,8 +63,8 @@ class SVITrainer:
 
     def _step(self, x, y, theta):
         if theta is None:
-            return self.svi.step(x, y=y)
-        return self.svi.step(x, theta=theta, y=y)
+            return self.svi.step(x, y=y, n_data=self.n_data)
+        return self.svi.step(x, theta=theta, y=y, n_data=self.n_data)
 
     def fit(
         self,
@@ -77,13 +78,19 @@ class SVITrainer:
             val_metric_fn : callable(model, guide, val_loader, device) -> dict
                             must return a key 'nll' used for early stopping.
         """
+        # Compute dataset size for likelihood scaling (minibatch KL correction)
+        try:
+            self.n_data = len(train_loader.dataset)
+        except TypeError:
+            self.n_data = sum(b[0].shape[0] for b in train_loader)
+
         # Initialize guide on one batch (necessary for AutoNormal to place params)
         first = next(iter(train_loader))
         x0, y0, theta0 = _unpack_batch(first, self.device)
         if theta0 is None:
-            self.guide(x0, y=y0)
+            self.guide(x0, y=y0, n_data=self.n_data)
         else:
-            self.guide(x0, theta=theta0, y=y0)
+            self.guide(x0, theta=theta0, y=y0, n_data=self.n_data)
 
         best_val = float("inf")
         bad = 0
