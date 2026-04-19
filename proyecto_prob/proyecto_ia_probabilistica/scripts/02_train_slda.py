@@ -25,6 +25,7 @@ if str(ROOT) not in sys.path:
 os.chdir(ROOT)
 
 from src.data.loader import load_bow, load_ood, load_raw, split_tfidf  # noqa: E402
+from src.models import slda as slda_mod  # noqa: E402
 from src.models.slda import AmortizedSLDA, SLDAConfig  # noqa: E402
 from src.utils.seed import set_seed  # noqa: E402
 
@@ -42,7 +43,7 @@ def main():
     args = ap.parse_args()
 
     set_seed(args.seed)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
     # --- Load data ---
@@ -95,7 +96,15 @@ def main():
     slda.save(out_dir)
     feat_names = vec.get_feature_names_out()  # vec is now bow_vectorizer
     top_words = {str(k): ws for k, ws in slda.topics.top_words(feat_names, top_k=12).items()}
-    topic_sent = slda.topic_sentiment(mc=200)
+    predictive = slda_mod.pyro.infer.Predictive(
+        slda.head,
+        guide=slda.guide,
+        num_samples=200,
+        return_sites=("linear.weight",),
+    )
+    dummy = torch.zeros(1, args.n_topics, device=device)
+    W_samples = predictive(dummy)["linear.weight"]
+    topic_sent = W_samples.mean(0).detach().cpu().numpy()[0]
     with open(out_dir / "topic_words.json", "w") as f:
         json.dump(top_words, f, indent=2)
     with open(out_dir / "topic_sentiment.json", "w") as f:
@@ -110,8 +119,10 @@ def main():
     # --- Quick sanity accuracy using only theta ---
     import torch as _t
     for split, y in [("val", y_val), ("test", y_test)]:
-        probs = slda.predict_probs(theta[split], mc=200)
-        acc = float((probs.argmax(1) == _t.tensor(y)).float().mean().item())
+        theta_t = _t.tensor(theta[split], dtype=_t.float32, device=device)
+        probs = slda.predict_probs(theta_t, mc=200)
+        y_t = _t.tensor(y, dtype=_t.long, device=probs.device)
+        acc = float((probs.argmax(1) == y_t).float().mean().item())
         print(f"  {split} accuracy from theta only: {acc:.4f}")
 
     print(f"\nSaved to: {out_dir.resolve()}")

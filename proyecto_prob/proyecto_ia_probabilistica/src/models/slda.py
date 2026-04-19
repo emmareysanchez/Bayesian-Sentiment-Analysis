@@ -250,15 +250,18 @@ class AmortizedSLDA:
     def predict_probs(self, theta: torch.Tensor | np.ndarray, mc: int = 100) -> torch.Tensor:
         """Return mean predicted probabilities under the posterior q(W)."""
         assert self.head is not None and self.guide is not None
+        model_device = self.head.linear.w_loc.device
         predictive = pyro.infer.Predictive(
             self.head, guide=self.guide, num_samples=mc, return_sites=("_RETURN",)
         )
         if isinstance(theta, np.ndarray):
-            theta = torch.tensor(theta, dtype=torch.float32)
+            theta = torch.tensor(theta, dtype=torch.float32, device=model_device)
+        else:
+            theta = theta.to(model_device)
         logits = predictive(theta)["_RETURN"]           # [S, B]
         p1 = torch.sigmoid(logits).mean(0)              # [B]
         probs = torch.stack([1 - p1, p1], dim=-1)       # [B, 2]
-        return probs.cpu()
+        return probs
 
     def topic_sentiment(self, mc: int = 200) -> np.ndarray:
         """Posterior mean of W mapping topic -> sentiment score (pos - neg)."""
@@ -266,7 +269,7 @@ class AmortizedSLDA:
         predictive = pyro.infer.Predictive(
             self.head, guide=self.guide, num_samples=mc, return_sites=("linear.weight",)
         )
-        dummy = torch.zeros(1, self.cfg.n_topics)
+        dummy = torch.zeros(1, self.cfg.n_topics, device=self.head.linear.w_loc.device)
         W_samples = predictive(dummy)["linear.weight"]   # [S, 1, K]
         W_mean = W_samples.mean(0).cpu().numpy()         # [1, K]
         return W_mean[0]                                 # positive logit coefficient per topic
