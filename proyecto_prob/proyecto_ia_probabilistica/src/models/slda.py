@@ -288,7 +288,8 @@ class AmortizedSLDA:
         obj = AmortizedSLDA(cfg)
         obj.topics = TopicExtractor.load(p / "lda.pkl")
         pyro.clear_param_store()
-        pyro.get_param_store().load(str(p / "supervised_head.pt"), map_location=device)
+        state = torch.load(str(p / "supervised_head.pt"), map_location=device, weights_only=False)
+        pyro.get_param_store().set_state(state)
         obj.head = SupervisedHead(
             n_topics=cfg.n_topics,
             prior_std_w=cfg.prior_std_w,

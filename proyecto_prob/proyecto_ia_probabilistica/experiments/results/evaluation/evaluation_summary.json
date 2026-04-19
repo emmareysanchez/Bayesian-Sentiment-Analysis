@@ -1,0 +1,17 @@
+{
+  "metrics_summary_csv": "C:\\Users\\Usuario\\OneDrive - Universidad Pontificia Comillas\\ICAI\\Master\\IAProbabilistica\\PFJimena\\Bayesian-Sentiment-Analysis\\proyecto_prob\\proyecto_ia_probabilistica\\experiments\\results\\evaluation\\metrics_summary.csv",
+  "selective_prediction_csv": "C:\\Users\\Usuario\\OneDrive - Universidad Pontificia Comillas\\ICAI\\Master\\IAProbabilistica\\PFJimena\\Bayesian-Sentiment-Analysis\\proyecto_prob\\proyecto_ia_probabilistica\\experiments\\results\\evaluation\\selective_prediction.csv",
+  "ood_detection_csv": "C:\\Users\\Usuario\\OneDrive - Universidad Pontificia Comillas\\ICAI\\Master\\IAProbabilistica\\PFJimena\\Bayesian-Sentiment-Analysis\\proyecto_prob\\proyecto_ia_probabilistica\\experiments\\results\\evaluation\\ood_detection.csv",
+  "plots": [
+    "ood_uncertainty_hist.pdf",
+    "reliability_diagram.pdf",
+    "risk_coverage.pdf"
+  ],
+  "models_evaluated": [
+    "bnn_base",
+    "bnn_moe",
+    "bnn_moe_hetero",
+    "deterministic",
+    "mc_dropout"
+  ]
+}

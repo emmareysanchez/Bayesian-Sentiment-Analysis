@@ -1,15 +1,9 @@
 # ========================
-# DATA (never upload raw data to GitHub)
+# EXPERIMENTS
 # ========================
-data/raw/
-data/processed/
-data/ood/
-*.csv
-*.tsv
-*.json
-*.parquet
-*.h5
-*.hdf5
+
+proyecto_prob/proyecto_ia_probabilistica/experiments/results/models/
+proyecto_prob/proyecto_ia_probabilistica/experiments/results/slda/
 
 # ========================
 # MODEL CHECKPOINTS
@@ -19,8 +13,6 @@ data/ood/
 *.ckpt
 *.pkl
 *.pickle
-models/checkpoints/
-experiments/results/
 
 # ========================
 # PYTHON
@@ -49,13 +41,13 @@ MANIFEST
 # ========================
 # VIRTUAL ENVIRONMENTS
 # ========================
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
+*/.env
+*/.venv
+*/env/
+*/venv/
+*/ENV/
+*/env.bak/
+*/venv.bak/
 
 # ========================
 # JUPYTER NOTEBOOKS
@@ -121,4 +113,3 @@ paper/*.out
 paper/*.synctex.gz
 paper/*.toc
 ia_prob_env/
-experiments/

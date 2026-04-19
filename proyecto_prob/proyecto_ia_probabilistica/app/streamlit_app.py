@@ -2,15 +2,6 @@
 
 Usage (from project root):
     streamlit run app/streamlit_app.py
-
-Features:
-    - Paste a review text
-    - Get p(y|x) with Monte Carlo BNN prediction
-    - See uncertainty decomposition (aleatoric, epistemic)
-    - See decision: classify automatically, or route to human review
-
-The app loads the first seed of the best available model (prefers bnn_moe_hetero
--> bnn_moe -> bnn_base -> mc_dropout -> deterministic).
 """
 from __future__ import annotations
 
@@ -23,7 +14,6 @@ import numpy as np
 import streamlit as st
 import torch
 
-# Add project root to path
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -32,20 +22,54 @@ os.chdir(ROOT)
 import pyro
 from pyro.infer.autoguide import AutoNormal
 
-from src.data.loader import Standardizer, load_tfidf
+from src.data.loader import Standardizer, load_bow, load_tfidf
+from src.data.preprocessing import clean_text
 from src.evaluation.uncertainty import decompose_mc
 from src.models.bnn_moe import BayesianMoE, BayesianMoEConfig
 from src.models.deterministic import DeterministicMLP
 from src.models.mc_dropout import MCDropoutMLP
 from src.models.slda import AmortizedSLDA
 
-MODELS_PREFERENCE = [
-    "bnn_moe_hetero",
-    "bnn_moe",
-    "bnn_base",
-    "mc_dropout",
-    "deterministic",
-]
+ALL_MODELS = ["deterministic", "mc_dropout", "bnn_base", "bnn_moe", "bnn_moe_hetero"]
+MODELS_ROOT = Path("experiments/results/models")
+SLDA_DIR = Path("experiments/results/slda")
+METRICS_RAW = Path("experiments/results/evaluation/metrics_raw.csv")
+
+
+# -----------------------------
+# Seed selection helpers
+# -----------------------------
+
+def _available_seeds(model_dir: Path) -> list[str]:
+    return sorted([s.name for s in model_dir.iterdir() if s.is_dir() and s.name.startswith("seed_")])
+
+
+def _best_seed(model_name: str) -> str | None:
+    """Return seed name with highest test accuracy from metrics_raw.csv."""
+    if not METRICS_RAW.exists():
+        return None
+    try:
+        import csv
+        best_seed, best_acc = None, -1.0
+        with open(METRICS_RAW) as f:
+            for row in csv.DictReader(f):
+                if row["model"] == model_name and row["split"] == "test":
+                    acc = float(row["accuracy"])
+                    if acc > best_acc:
+                        best_acc = acc
+                        best_seed = f"seed_{row['seed']}"
+        return best_seed
+    except Exception:
+        return None
+
+
+def _available_models() -> list[str]:
+    if not MODELS_ROOT.exists():
+        return []
+    return [
+        n for n in ALL_MODELS
+        if (MODELS_ROOT / n).exists() and _available_seeds(MODELS_ROOT / n)
+    ]
 
 
 # -----------------------------
@@ -61,33 +85,36 @@ def load_bert():
     return tok, model
 
 
+def _slda_vectorizer_type() -> str:
+    """Read slda_meta.json to know which vectorizer sLDA was trained with."""
+    meta_path = SLDA_DIR / "slda_meta.json"
+    if meta_path.exists():
+        with open(meta_path) as f:
+            return json.load(f).get("vectorizer", "bow")
+    # Legacy: if no meta file, guess from what files exist
+    if (SLDA_DIR / "lda.pkl").exists():
+        return "bow"  # new default after the BOW fix
+    return "bow"
+
+
 @st.cache_resource
-def load_slda(slda_dir: str = "experiments/results/slda"):
-    p = Path(slda_dir)
-    if not (p / "lda.pkl").exists():
+def load_slda():
+    if not (SLDA_DIR / "lda.pkl").exists():
         return None, None
-    slda = AmortizedSLDA.load(p, device="cpu")
-    _, vec = load_tfidf()
+    slda = AmortizedSLDA.load(SLDA_DIR, device="cpu")
+    vec_type = _slda_vectorizer_type()
+    if vec_type == "tfidf":
+        _, vec = load_tfidf()
+    else:
+        _, vec = load_bow()
     return slda, vec
 
 
-def _find_available_model(models_root: Path) -> str | None:
-    for name in MODELS_PREFERENCE:
-        d = models_root / name
-        if d.exists():
-            seeds = sorted([s for s in d.iterdir() if s.is_dir()])
-            if seeds:
-                return name
-    return None
-
-
 @st.cache_resource
-def load_sentiment_model(models_root_s: str = "experiments/results/models"):
-    models_root = Path(models_root_s)
-    name = _find_available_model(models_root)
-    if name is None:
+def load_model(name: str, seed_name: str):
+    seed_dir = MODELS_ROOT / name / seed_name
+    if not seed_dir.exists():
         return None
-    seed_dir = sorted([s for s in (models_root / name).iterdir() if s.is_dir()])[0]
 
     if name in ("deterministic", "mc_dropout"):
         ck = torch.load(seed_dir / "state.pt", map_location="cpu", weights_only=False)
@@ -100,19 +127,19 @@ def load_sentiment_model(models_root_s: str = "experiments/results/models"):
         model.eval()
         scaler = Standardizer(ck["scaler_mean"], ck["scaler_std"])
         return {
-            "name": name, "kind": name, "model": model, "guide": None,
+            "name": name, "seed": seed_name, "kind": name,
+            "model": model, "guide": None,
             "scaler": scaler, "use_theta": False,
         }
 
     # Bayesian
     meta = torch.load(seed_dir / "meta.pt", map_location="cpu", weights_only=False)
-    cfg_d = meta["cfg"]
-    cfg = BayesianMoEConfig(**cfg_d)
+    cfg = BayesianMoEConfig(**meta["cfg"])
     pyro.clear_param_store()
-    pyro.get_param_store().load(str(seed_dir / "pyro_store.pt"), map_location="cpu")
+    state = torch.load(str(seed_dir / "pyro_store.pt"), map_location="cpu", weights_only=False)
+    pyro.get_param_store().set_state(state)
     model = BayesianMoE(cfg)
     guide = AutoNormal(model)
-    # Warm guide with dummy input to initialize param shapes
     dummy_x = torch.zeros(2, cfg.input_dim)
     dummy_y = torch.zeros(2, dtype=torch.long)
     if meta["use_theta"]:
@@ -122,7 +149,8 @@ def load_sentiment_model(models_root_s: str = "experiments/results/models"):
         guide(dummy_x, None, dummy_y)
     scaler = Standardizer(meta["scaler_mean"], meta["scaler_std"])
     return {
-        "name": name, "kind": "bnn", "model": model, "guide": guide,
+        "name": name, "seed": seed_name, "kind": "bnn",
+        "model": model, "guide": guide,
         "scaler": scaler, "use_theta": bool(meta["use_theta"]),
         "cfg": cfg,
     }
@@ -133,6 +161,10 @@ def load_sentiment_model(models_root_s: str = "experiments/results/models"):
 # -----------------------------
 
 def encode_text(text: str, tok, bert) -> np.ndarray:
+    """Encode text exactly as done during dataset preprocessing."""
+    text = clean_text(text)
+    if not text.strip():
+        text = "[UNK]"
     enc = tok([text], truncation=True, padding=True, max_length=256, return_tensors="pt")
     with torch.no_grad():
         h = bert(**enc).last_hidden_state[:, 0, :]
@@ -142,20 +174,22 @@ def encode_text(text: str, tok, bert) -> np.ndarray:
 def theta_for_text(text: str, slda, vec) -> np.ndarray | None:
     if slda is None or vec is None:
         return None
-    X = vec.transform([text])
+    cleaned = clean_text(text) or "[UNK]"
+    X = vec.transform([cleaned])
     return slda.theta(X)
 
 
 def predict(text: str, bundle: dict, tok, bert, slda=None, vec=None, mc_samples: int = 100):
-    emb = encode_text(text, tok, bert)             # [1, 768]
+    emb = encode_text(text, tok, bert)
     emb_t = torch.tensor(emb, dtype=torch.float32)
     emb_std = bundle["scaler"].transform(emb_t)
 
     theta_np = None
-    if bundle["use_theta"]:
+    if bundle.get("use_theta"):
         theta_np = theta_for_text(text, slda, vec)
         if theta_np is None:
-            theta_np = np.ones((1, bundle["cfg"].n_experts), dtype=np.float32) / bundle["cfg"].n_experts
+            n_exp = bundle["cfg"].n_experts
+            theta_np = np.ones((1, n_exp), dtype=np.float32) / n_exp
         theta_t = torch.tensor(theta_np, dtype=torch.float32)
     else:
         theta_t = None
@@ -163,10 +197,10 @@ def predict(text: str, bundle: dict, tok, bert, slda=None, vec=None, mc_samples:
     if bundle["kind"] == "deterministic":
         with torch.no_grad():
             probs = torch.softmax(bundle["model"](emb_std), dim=-1)
-        mc = probs.unsqueeze(0)  # [1, 1, 2]
+        mc = probs.unsqueeze(0)
     elif bundle["kind"] == "mc_dropout":
         with torch.no_grad():
-            logits = bundle["model"].mc_forward(emb_std, mc_samples=mc_samples)  # [S,1,2]
+            logits = bundle["model"].mc_forward(emb_std, mc_samples=mc_samples)
             mc = torch.softmax(logits, dim=-1)
     else:  # bnn
         predictive = pyro.infer.Predictive(
@@ -200,13 +234,49 @@ st.caption("Monteagudo & Rey — MUIA 2025/2026 · IA Probabilística")
 
 with st.sidebar:
     st.header("Model")
-    bundle = load_sentiment_model()
-    if bundle is None:
-        st.error("No trained model found. Run `scripts/03_train_all_models.py` first.")
+    available_models = _available_models()
+    if not available_models:
+        st.error("No trained models found. Run `scripts/03_train_all_models.py` first.")
         st.stop()
-    st.info(f"Loaded: **{bundle['name']}**")
-    st.write(f"Uses topic gating: {bundle['use_theta']}")
 
+    selected_model = st.selectbox("Architecture", available_models, index=0)
+
+    seeds = _available_seeds(MODELS_ROOT / selected_model)
+    best = _best_seed(selected_model)
+    seed_options = ["Auto (best accuracy)"] + seeds
+    seed_choice = st.selectbox("Seed", seed_options, index=0)
+
+    if seed_choice == "Auto (best accuracy)":
+        resolved_seed = best if best and best in seeds else seeds[0]
+        if best:
+            st.caption(f"Best seed by test accuracy: **{resolved_seed}**")
+        else:
+            st.caption(f"metrics_raw.csv not found, using **{resolved_seed}**")
+    else:
+        resolved_seed = seed_choice
+
+    bundle = load_model(selected_model, resolved_seed)
+    if bundle is None:
+        st.error(f"Could not load {selected_model} / {resolved_seed}")
+        st.stop()
+
+    bayesian = bundle["kind"] not in ("deterministic",)
+    st.info(f"Loaded: **{bundle['name']}** · {resolved_seed}")
+    st.write(f"Bayesian: {bayesian} · Topic gating: {bundle.get('use_theta', False)}")
+
+    # Show seed accuracy if available
+    if best and METRICS_RAW.exists():
+        try:
+            import csv
+            with open(METRICS_RAW) as f:
+                for row in csv.DictReader(f):
+                    if row["model"] == selected_model and row["split"] == "test" and f"seed_{row['seed']}" == resolved_seed:
+                        st.caption(f"Test accuracy (this seed): {float(row['accuracy']):.3f}")
+                        break
+        except Exception:
+            pass
+
+    st.divider()
     st.header("Decision rule")
     default_tau = 0.4
     try:
@@ -218,57 +288,96 @@ with st.sidebar:
             st.caption(f"τ* from business analysis = {default_tau:.3f}")
     except Exception:
         pass
-    tau = st.slider("Rejection threshold τ (on predictive entropy)",
+    tau = st.slider("Rejection threshold τ (predictive entropy)",
                     0.0, 0.693, default_tau, step=0.005)
-    st.caption("Higher τ → the model abstains less often")
+    st.caption("Higher τ → model abstains less often")
+
+    # Show which vectorizer sLDA uses
+    if bundle.get("use_theta"):
+        vec_type = _slda_vectorizer_type()
+        st.caption(f"sLDA vectorizer: **{vec_type}**")
 
 tok, bert = load_bert()
-slda, vec = load_slda() if bundle["use_theta"] else (None, None)
+slda, vec = load_slda() if bundle.get("use_theta") else (None, None)
 
-col1, col2 = st.columns([2, 1])
-with col1:
-    text = st.text_area(
-        "Review text",
-        value="This movie was absolutely amazing, I loved every second of it!",
-        height=180,
-    )
+# -----------------------------
+# Main panel
+# -----------------------------
+
+example_reviews = {
+    "Custom": "",
+    "Positive": """I absolutely loved this movie. The performances were excellent, the story kept me engaged from beginning to end, and the soundtrack was beautiful. It had emotional depth, memorable characters, and a very satisfying ending. I would definitely recommend it to anyone who enjoys heartfelt and well-acted films.""",
+    "Negative": """This movie was a huge disappointment. The plot was messy, the pacing was painfully slow, and most of the characters felt flat and unconvincing. I kept waiting for it to improve, but it never did. By the end, I felt like I had wasted my time.""",
+    "Ambiguous": """The movie had some strong moments and a few good performances, but overall I found it uneven. Some scenes were genuinely moving, while others felt forced or unnecessary. I can see why some people would like it, but I was left with mixed feelings.""",
+}
+
+if "review_text" not in st.session_state:
+    st.session_state.review_text = ""
+
+selected_example = st.selectbox(
+    "Example review",
+    list(example_reviews.keys()),
+    index=0,
+)
+
+if selected_example != "Custom":
+    st.session_state.review_text = example_reviews[selected_example]
+
+text = st.text_area(
+    "Review text",
+    key="review_text",
+    height=180,
+    placeholder="Paste a movie review here..."
+)
 
 if st.button("Analyze", type="primary"):
-    with st.spinner("Running Monte Carlo predictions..."):
+    with st.spinner("Running predictions..."):
         out = predict(text, bundle, tok, bert, slda=slda, vec=vec, mc_samples=100)
 
-    p_neg, p_pos = float(out["mean_probs"][0]), float(out["mean_probs"][1])
-    H = out["predictive_entropy"]
+    p_neg = float(out["mean_probs"][0])
+    p_pos = float(out["mean_probs"][1])
+    H     = out["predictive_entropy"]
     H_ale = out["aleatoric_entropy"]
-    MI = out["mutual_info"]
+    MI    = out["mutual_info"]
 
-    decision = "🙋 REVIEW (abstain)" if H > tau else ("😊 POSITIVE" if p_pos >= p_neg else "😞 NEGATIVE")
+    decision = "🙋 ABSTAIN (human review)" if H > tau else ("😊 POSITIVE" if p_pos >= p_neg else "😞 NEGATIVE")
 
+    # Probabilities + decision
+    st.subheader("Prediction")
     c1, c2, c3 = st.columns(3)
     c1.metric("p(negative)", f"{p_neg:.3f}")
     c2.metric("p(positive)", f"{p_pos:.3f}")
     c3.metric("Decision", decision)
 
-    st.subheader("Uncertainty decomposition")
-    d1, d2, d3 = st.columns(3)
-    d1.metric("Predictive entropy  H[E(p)]", f"{H:.3f}", help="Total uncertainty")
-    d2.metric("Aleatoric  E[H(p)]", f"{H_ale:.3f}", help="Data noise (irreducible)")
-    d3.metric("Epistemic  MI", f"{MI:.3f}", help="Model uncertainty (reducible with more data)")
-
     if H > tau:
         st.warning(
             f"Predictive entropy {H:.3f} > τ = {tau:.3f}. "
-            "Recommendation: route this review to human review."
+            "Routing to human review."
         )
     else:
         st.success(f"Predictive entropy {H:.3f} ≤ τ = {tau:.3f}. Auto-classify.")
 
+    # Uncertainty
+    st.subheader("Uncertainty")
+    if bayesian:
+        d1, d2, d3 = st.columns(3)
+        d1.metric("Predictive entropy H[ȳ]", f"{H:.4f}",
+                  help="Total uncertainty — used for τ")
+        d2.metric("Aleatoric  E[H(p)]", f"{H_ale:.4f}",
+                  help="Irreducible data noise")
+        d3.metric("Epistemic  MI", f"{MI:.4f}",
+                  help="Model uncertainty (reducible with more data)")
+    else:
+        st.metric("Predictive entropy", f"{H:.4f}")
+        st.caption("Deterministic model — no epistemic/aleatoric decomposition available.")
+
+    # Topic mixture (only when use_theta)
     if out["theta"] is not None:
-        st.subheader("Topic mixture θ (from sLDA)")
+        st.subheader("Topic mixture θ (sLDA)")
         try:
-            with open("experiments/results/slda/topic_words.json") as f:
+            with open(SLDA_DIR / "topic_words.json") as f:
                 tw = json.load(f)
-            with open("experiments/results/slda/topic_sentiment.json") as f:
+            with open(SLDA_DIR / "topic_sentiment.json") as f:
                 ts = json.load(f)
         except Exception:
             tw, ts = {}, {}
@@ -280,10 +389,12 @@ if st.button("Analyze", type="primary"):
             tag = "POS" if sent > 0.1 else ("NEG" if sent < -0.1 else "neu")
             st.write(f"- **Topic {int(k)}** ({theta[k]*100:.1f}%, {tag} {sent:+.2f}): _{words}_")
 
-    st.expander("Raw output").json({
-        "mean_probs": out["mean_probs"].tolist(),
-        "predictive_entropy": H,
-        "aleatoric_entropy": H_ale,
-        "mutual_info": MI,
-        "mc_samples": out["mc_samples_count"],
-    })
+    # Raw output
+    with st.expander("Raw output"):
+        st.json({
+            "mean_probs": out["mean_probs"].tolist(),
+            "predictive_entropy": H,
+            "aleatoric_entropy": H_ale,
+            "mutual_info": MI,
+            "mc_samples": out["mc_samples_count"],
+        })

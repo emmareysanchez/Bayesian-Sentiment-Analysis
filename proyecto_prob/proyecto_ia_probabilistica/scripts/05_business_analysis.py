@@ -33,12 +33,10 @@ def _max_softmax_unc(mean_probs: np.ndarray) -> np.ndarray:
 
 
 def _pick_score(seed_dir: Path):
-    """Return (score_name, score_array) using best available Bayesian score."""
+    """Return (score_name, score_array) always using predictive_entropy for τ."""
     unc_path = seed_dir / "uncertainty_test.npz"
     if unc_path.exists():
         unc = np.load(unc_path)
-        if "mutual_info" in unc and np.std(unc["mutual_info"]) > 1e-6:
-            return "mutual_info", unc["mutual_info"]
         if "predictive_entropy" in unc:
             return "predictive_entropy", unc["predictive_entropy"]
     probs = np.load(seed_dir / "probs_test.npy")

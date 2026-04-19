@@ -109,6 +109,8 @@ def main():
         json.dump(top_words, f, indent=2)
     with open(out_dir / "topic_sentiment.json", "w") as f:
         json.dump({str(k): float(v) for k, v in enumerate(topic_sent)}, f, indent=2)
+    with open(out_dir / "slda_meta.json", "w") as f:
+        json.dump({"vectorizer": "bow"}, f)
 
     print("\nTop words per topic (sentiment score = pos - neg logit):")
     for k in range(args.n_topics):
