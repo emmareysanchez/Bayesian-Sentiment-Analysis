@@ -118,28 +118,36 @@ def train_deterministic(
     best_state = None; best_nll = float("inf"); bad = 0
     for ep in range(cfg["epochs"]):
         model.train()
+        train_loss = 0.0; n_tr = 0
         for xb, yb in dl_tr:
             xb, yb = xb.to(device), yb.to(device)
             opt.zero_grad()
             loss = crit(model(xb), yb)
             loss.backward(); opt.step()
+            train_loss += float(loss.item()) * len(yb)
+            n_tr += len(yb)
 
-        # val NLL
+        # val NLL + accuracy
         model.eval()
         with torch.no_grad():
-            vl = 0.0; n = 0
+            vl = 0.0; n = 0; correct = 0
             for xb, yb in dl_va:
                 xb = xb.to(device); yb = yb.to(device)
                 p = torch.softmax(model(xb), dim=-1)
                 vl += float(-torch.log(p[torch.arange(len(yb)), yb].clamp_min(1e-8)).sum())
+                correct += int((p.argmax(1) == yb).sum())
                 n += len(yb)
             v = vl / max(n, 1)
+            val_acc = correct / max(n, 1)
+        marker = " *" if v < best_nll - 1e-4 else ""
+        print(f"  epoch {ep+1:02d}  train_loss={train_loss/max(n_tr,1):.4f}  val_nll={v:.4f}  val_acc={val_acc:.4f}{marker}")
         if v < best_nll - 1e-4:
             best_nll = v; bad = 0
             best_state = {k: t.detach().cpu().clone() for k, t in model.state_dict().items()}
         else:
             bad += 1
             if bad >= cfg["patience"]:
+                print("  early stopping")
                 break
     if best_state is not None:
         model.load_state_dict(best_state)
@@ -283,7 +291,7 @@ MODELS_TO_TRAIN = [
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--seeds", type=int, nargs="+", default=[42, 43, 44])
+    ap.add_argument("--seeds", type=int, nargs="+", default=[42, 43])
     ap.add_argument("--epochs", type=int, default=50)
     ap.add_argument("--batch-size", type=int, default=64)
     ap.add_argument("--patience", type=int, default=10)

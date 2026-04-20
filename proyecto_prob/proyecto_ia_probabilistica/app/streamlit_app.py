@@ -30,7 +30,7 @@ from src.models.deterministic import DeterministicMLP
 from src.models.mc_dropout import MCDropoutMLP
 from src.models.slda import AmortizedSLDA
 
-AVAILABLE_MODELS = ["deterministic", "mc_dropout", "bnn_moe"]
+AVAILABLE_MODELS = ["deterministic", "mc_dropout", "bnn_base", "bnn_moe", "bnn_moe_hetero"]
 MODELS_ROOT = Path("experiments/results/models")
 SLDA_DIR    = Path("experiments/results/slda")
 METRICS_RAW = Path("experiments/results/evaluation/metrics_raw.csv")
@@ -237,8 +237,13 @@ def predict(text: str, bundle: dict, tok, bert, slda=None, vec=None, mc_samples:
         mc = torch.softmax(logits, dim=-1)
 
     decomp = decompose_mc(mc)
+    mean_probs = mc.mean(0).squeeze(0).detach().cpu().numpy()
+    pred_idx   = int(mean_probs.argmax())
+    label_map  = {0: "NEGATIVE", 1: "POSITIVE"}
+    shown_label = label_map[pred_idx]
+
     return {
-        "mean_probs":          mc.mean(0).squeeze(0).detach().cpu().numpy(),
+        "mean_probs":          mean_probs,
         "predictive_entropy":  float(decomp["predictive_entropy"].item()),
         "aleatoric_entropy":   float(decomp["aleatoric_entropy"].item()),
         "mutual_info":         float(decomp["mutual_info"].item()),
@@ -253,7 +258,7 @@ def predict(text: str, bundle: dict, tok, bert, slda=None, vec=None, mc_samples:
 
 st.set_page_config(page_title="Bayesian Sentiment", page_icon="🧠", layout="wide")
 st.title("🧠 Bayesian Sentiment Analyzer")
-st.caption("Monteagudo & Rey — MUIA 2025/2026 · IA Probabilística")
+st.caption("Jimena Monteagudo & Emma Rey — MUIA 2025/2026 · IA Probabilística")
 
 with st.sidebar:
     st.header("Model")

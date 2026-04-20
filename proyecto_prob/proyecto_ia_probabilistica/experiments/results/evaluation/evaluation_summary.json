@@ -1,7 +1,7 @@
 {
-  "metrics_summary_csv": "C:\\Users\\Usuario\\OneDrive - Universidad Pontificia Comillas\\ICAI\\Master\\IAProbabilistica\\PFJimena\\Bayesian-Sentiment-Analysis\\proyecto_prob\\proyecto_ia_probabilistica\\experiments\\results\\evaluation\\metrics_summary.csv",
-  "selective_prediction_csv": "C:\\Users\\Usuario\\OneDrive - Universidad Pontificia Comillas\\ICAI\\Master\\IAProbabilistica\\PFJimena\\Bayesian-Sentiment-Analysis\\proyecto_prob\\proyecto_ia_probabilistica\\experiments\\results\\evaluation\\selective_prediction.csv",
-  "ood_detection_csv": "C:\\Users\\Usuario\\OneDrive - Universidad Pontificia Comillas\\ICAI\\Master\\IAProbabilistica\\PFJimena\\Bayesian-Sentiment-Analysis\\proyecto_prob\\proyecto_ia_probabilistica\\experiments\\results\\evaluation\\ood_detection.csv",
+  "metrics_summary_csv": "/Users/jimenamonteagudoruiz/Bayesian-Sentiment-Analysis/proyecto_prob/proyecto_ia_probabilistica/experiments/results/evaluation/metrics_summary.csv",
+  "selective_prediction_csv": "/Users/jimenamonteagudoruiz/Bayesian-Sentiment-Analysis/proyecto_prob/proyecto_ia_probabilistica/experiments/results/evaluation/selective_prediction.csv",
+  "ood_detection_csv": "/Users/jimenamonteagudoruiz/Bayesian-Sentiment-Analysis/proyecto_prob/proyecto_ia_probabilistica/experiments/results/evaluation/ood_detection.csv",
   "plots": [
     "ood_uncertainty_hist.pdf",
     "reliability_diagram.pdf",

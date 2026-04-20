@@ -71,11 +71,37 @@ class TopicExtractor:
         return out
 
     def save(self, path: str | Path):
+        path = Path(path)
         joblib.dump(self, path)
+        # Save fitted arrays separately for cross-numpy-version compatibility
+        np.save(str(path) + ".components.npy", self.lda.components_)
+        np.save(str(path) + ".exp_dirichlet.npy", self.lda.exp_dirichlet_component_)
+        import json
+        with open(str(path) + ".meta.json", "w") as f:
+            json.dump({
+                "n_topics": self.n_topics,
+                "doc_topic_prior": float(self.lda.doc_topic_prior_),
+                "n_features_in": int(self.lda.n_features_in_),
+            }, f)
 
     @staticmethod
     def load(path: str | Path) -> "TopicExtractor":
-        return joblib.load(path)
+        path = Path(path)
+        try:
+            return joblib.load(path)
+        except Exception:
+            # Fallback: reconstruct LDA from saved arrays (numpy-version agnostic)
+            import json
+            components = np.load(str(path) + ".components.npy")
+            exp_dirichlet = np.load(str(path) + ".exp_dirichlet.npy")
+            with open(str(path) + ".meta.json") as f:
+                meta = json.load(f)
+            obj = TopicExtractor(n_topics=meta["n_topics"])
+            obj.lda.components_ = components
+            obj.lda.exp_dirichlet_component_ = exp_dirichlet
+            obj.lda.doc_topic_prior_ = meta["doc_topic_prior"]
+            obj.lda.n_features_in_ = meta["n_features_in"]
+            return obj
 
 
 # -----------------------------
