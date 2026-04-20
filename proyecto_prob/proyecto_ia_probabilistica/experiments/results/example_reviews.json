@@ -1,0 +1,43 @@
+{
+  "positive": [
+    {
+      "text": "I was born in Beijing, China and moved to the United States at the age of 9. Been home to Beijing several times since and loved it each time. One of the many things I love about Beijing is the people and the ambiance they bring to the city. \"You hau hao hao shuo\" (which translate more accurately to \"if you have something to say, say it nicely\") delightfully and truthfully captures that feeling of Beijing. I suppose you would have to have lived in and kinda understood Beijing and its people to get the most out of this movie, though you might enjoy it regardless.",
+      "label": 1,
+      "mean_entropy": 0.09719451535493136,
+      "_local_idx": 1555
+    },
+    {
+      "text": "... for Paris is a moveable feast.\" Ernest Hemingway<br /><br />It is impossible to count how many great talents have immortalized Paris in paintings, novels, songs, poems, short but unforgettable quotes, and yes - movies. The celebrated film director Max Ophüls said about Paris, <br /><br />\"It offered the shining wet boulevards under the street lights, breakfast in Montmartre with cognac in your glass, coffee and lukewarm brioche, gigolos and prostitutes at night. Everyone in the world has two fatherlands: his own and Paris.",
+      "label": 1,
+      "mean_entropy": 0.1200285275777181,
+      "_local_idx": 497
+    },
+    {
+      "text": "This film is great - well written and very entertaining. David Duchovny shows, once again, that he is much more than Fox Mulder, and the performances by the old men are funny as can be. Old married folks (like me) will appreciate the connection between two hearts.",
+      "label": 1,
+      "mean_entropy": 0.14902401665846507,
+      "_local_idx": 1127
+    }
+  ],
+  "negative": [
+    {
+      "text": "I am not surprised to find user comments for this film full of gushy nonsense, such as that this film \"[proves] that when it is predestined, love will find a way.\" I begin in this way, not to criticize a specific reviewer, but because this citation so typifies the hyperbolic, uncritical treacle that was poured out over this film, even before it hit the theaters. Even the best of films do not \"prove\" anything, nor are they intended to. The best films entertain and move the viewer, and \"The English Patient\" fails on both criteria.",
+      "label": 0,
+      "mean_entropy": 0.07208763808012009,
+      "_local_idx": 1059
+    },
+    {
+      "text": "1 Bolo Yeung is in the movie ten minutes altogether including when he's serving iced drinks to his boss. 2 a lot of street thugs looking like junkyard keepers get instantly overpowered by the Asian superhero who talks like an illegal alien just out of the back of a manure truck. 3 (thug) let this to me -shirt off, gay model like muscles- heee-haaw! hee-heeew! hap hap! - he's dead on the floor with his neck, elbow, chin or balls broken - 4 cheap semi-sex scenes where the white broad come out of nowhere digs the Asian superhero.",
+      "label": 0,
+      "mean_entropy": 0.08694854012380043,
+      "_local_idx": 252
+    },
+    {
+      "text": "What's the point? Hasn't this been done before, better? And again? Why is Werner Herzog wasting his good talents and time with junk like this? Shouldn't he be shooting a movie somewhere--I mean a real movie? <br /><br />It all felt fake from the beginning. Werner Herzog would never have sought to make a film about the Loch Ness myth--at least not on such a small scale surrounded by losers--so the plot was not believable from the beginning. The actors who are supposed to act like they're not acting were obviously acting.",
+      "label": 0,
+      "mean_entropy": 0.10024348484973113,
+      "_local_idx": 1672
+    }
+  ],
+  "note": "correct+low-entropy across all 15 model/seed runs"
+}

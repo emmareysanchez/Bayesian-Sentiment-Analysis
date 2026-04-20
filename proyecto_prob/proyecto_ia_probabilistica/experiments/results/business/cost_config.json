@@ -1,5 +1,5 @@
 {
-  "cost_fp": 1.0,
+  "cost_fp": 2.0,
   "cost_fn": 5.0,
   "cost_review": 0.2
 }
