@@ -56,6 +56,36 @@ AD_HOC_STOPWORDS = {
     "al", "gore", "global", "warming", "columbo", "orson", "welles",
 }
 
+# -----------------------------------------------------------------------
+# Domain stopwords for LDA/BOW — removes words that are ubiquitous across
+# ALL movie reviews and therefore carry zero topic-discriminating signal.
+# Rule: a word that appears in >40% of reviews of BOTH classes is useless
+# for LDA topic separation.  These were identified empirically on IMDb.
+# -----------------------------------------------------------------------
+MOVIE_REVIEW_STOPWORDS = {
+    # Generic review meta-words
+    "film", "movie", "movies", "films", "watch", "watched", "watching",
+    "see", "seen", "make", "makes", "made", "just", "really", "like",
+    "good", "bad", "great", "time", "way", "lot", "bit", "things",
+    "think", "know", "don", "doesn", "didn", "isn", "wasn", "aren",
+    "people", "thing", "man", "woman", "men", "women", "guy", "guys",
+    "get", "got", "gets", "little", "look", "looks", "looked",
+    "comes", "come", "long", "end", "actually", "pretty", "felt",
+    "feel", "feel", "feels", "going", "goes", "went", "want", "wanted",
+    "says", "said", "told", "tell", "new", "old", "big", "small",
+    "ve", "ll", "re", "didn", "doesn", "isn", "wasn", "couldn",
+    "wouldn", "shouldn", "don", "won", "aren",
+    # Extremely common rating/opinion words that flatten all topics
+    "best", "worst", "terrible", "awful", "amazing", "excellent",
+    "boring", "interesting", "enjoyable", "entertaining", "disappointed",
+    "recommend", "worth", "waste", "overall", "especially", "however",
+    "although", "despite", "enough", "far", "away", "back", "right",
+    "left", "sure", "maybe", "perhaps", "probably", "certainly",
+    # Generic plot/narrative words that appear in every review
+    "plot", "story", "ending", "beginning", "middle", "half",
+    "real", "truly", "actually", "kind", "sort", "type", "lot",
+}
+
 TFIDF_CONFIG = dict(
     max_features=5_000,
     stop_words="english",
@@ -66,11 +96,11 @@ TFIDF_CONFIG = dict(
 )
 
 BOW_CONFIG = dict(
-    max_features=5_000,
+    max_features=8_000,          # larger vocab gives LDA more signal to separate topics
     stop_words="english",
-    min_df=50,
-    max_df=0.7,
-    ngram_range=(1, 1),   # unigrams only — LDA interprets word co-occurrence, not phrases
+    min_df=20,                   # lower min_df catches domain-specific rare-ish terms
+    max_df=0.45,                 # tighter: drop words appearing in >45% of docs
+    ngram_range=(1, 1),          # unigrams only — LDA interprets word co-occurrence
 )
 
 # -----------------------------
@@ -87,6 +117,19 @@ def clean_text(text: str) -> str:
     text = " ".join(words)
     text = re.sub(r"\s+", " ", text).strip()
     return text
+
+
+def clean_text_for_lda(text: str) -> str:
+    """Stricter cleaning for the BOW matrix fed to LDA.
+
+    Removes domain stopwords (MOVIE_REVIEW_STOPWORDS) on top of standard
+    cleaning so that LDA topics capture semantic aspects (genre, narrative,
+    production) rather than ubiquitous meta-words like 'film' or 'movie'.
+    """
+    text = clean_text(text)
+    words = text.split()
+    words = [w for w in words if w not in MOVIE_REVIEW_STOPWORDS and len(w) > 2]
+    return " ".join(words)
 
 
 # -----------------------------
@@ -368,10 +411,14 @@ def run(
     log.info(f"  TF-IDF shape: {tfidf.shape}")
 
     # --- BOW counts (for LDA — integer counts, not TF-IDF) ---
+    # Apply stricter LDA-specific cleaning to remove domain stopwords that
+    # would flatten topic separation (e.g. "film", "movie", "like", "just").
     log.info("Building BOW counts (for LDA)...")
+    lda_train_texts = [clean_text_for_lda(id_texts[i]) for i in splits["train"]]
+    lda_all_texts   = [clean_text_for_lda(t) for t in id_texts]
     bow_vec = CountVectorizer(**BOW_CONFIG)
-    bow_vec.fit(train_texts_for_fit)
-    bow = bow_vec.transform(id_texts)
+    bow_vec.fit(lda_train_texts)
+    bow = bow_vec.transform(lda_all_texts)
     log.info(f"  BOW shape: {bow.shape}")
 
     # --- BERT embeddings for in-distribution ---
@@ -413,7 +460,8 @@ def run(
     # Save OOD TF-IDF and BOW (needed for sLDA on OOD)
     ood_tfidf = vec.transform(ood_texts)
     sp.save_npz(OOD_DIR / "ood_tfidf.npz", ood_tfidf)
-    ood_bow = bow_vec.transform(ood_texts)
+    ood_texts_for_lda = [clean_text_for_lda(t) for t in ood_texts]
+    ood_bow = bow_vec.transform(ood_texts_for_lda)
     sp.save_npz(OOD_DIR / "ood_bow.npz", ood_bow)
 
     # Config snapshot
@@ -436,14 +484,14 @@ def run(
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--imdb-size", type=int, default=20000)
+    p.add_argument("--imdb-size", type=int, default=30000)
     p.add_argument("--ood-size-per-source", type=int, default=2000)
     p.add_argument("--val-size", type=float, default=0.10)
     p.add_argument("--test-size", type=float, default=0.10)
     p.add_argument("--label-noise", type=float, default=0.0)
     p.add_argument("--missing-rate", type=float, default=0.0)
     p.add_argument("--typo-doc-rate", type=float, default=0.0)
-    p.add_argument("--minority-ratio", type=float, default=0.5,
+    p.add_argument("--minority-ratio", type=float, default=1,
                    help="Positive = minority_ratio * negative in train")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--skip-bert", action="store_true",

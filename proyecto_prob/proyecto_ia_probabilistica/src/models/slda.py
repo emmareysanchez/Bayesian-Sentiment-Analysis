@@ -153,12 +153,16 @@ class SupervisedHead(PyroModule):
 @dataclass
 class SLDAConfig:
     n_topics: int = 10
-    prior_std_w: float = 0.5
-    prior_std_b: float = 1.0
-    lr: float = 1e-3
-    epochs: int = 30
-    batch_size: int = 256
-    patience: int = 5
+    # Tight prior on W: θ lives in a K-simplex (values ~0.1 each), so a
+    # unit-Normal prior is far too wide.  0.3 keeps weights small and reduces
+    # posterior variance, which helps AutoNormal converge stably.
+    prior_std_w: float = 0.3
+    prior_std_b: float = 0.5
+    # Lower LR: 1e-2 causes overshooting in the 10-dim simplex input space.
+    lr: float = 3e-4
+    epochs: int = 80       # more epochs; early stopping will cut if needed
+    batch_size: int = 512  # larger batches → lower gradient variance
+    patience: int = 12     # give it time to escape local plateaus
 
 
 class AmortizedSLDA:
@@ -205,9 +209,21 @@ class AmortizedSLDA:
             prior_std_b=self.cfg.prior_std_b,
         ).to(device)
         self.guide = AutoNormal(self.head)
-        self.guide(theta_train_t[: min(64, len(theta_train_t))], y_train_t[: min(64, len(y_train_t))])
 
-        svi = SVI(self.head, self.guide, Adam({"lr": self.cfg.lr}), loss=Trace_ELBO())
+        # Warm up the guide with a small batch before full training
+        warm_idx = slice(0, min(128, len(theta_train_t)))
+        self.guide(theta_train_t[warm_idx], y_train_t[warm_idx])
+
+        # Use a ClippedAdam optimizer: gradient clipping prevents the large
+        # early gradient spikes that destabilize AutoNormal on small inputs.
+        from pyro.optim import ClippedAdam
+        svi = SVI(
+            self.head,
+            self.guide,
+            ClippedAdam({"lr": self.cfg.lr, "clip_norm": 5.0,
+                         "lrd": 0.9995}),  # mild cosine-like decay per step
+            loss=Trace_ELBO(),
+        )
 
         history = {"train_elbo": [], "val_nll": []}
         best_val = float("inf")

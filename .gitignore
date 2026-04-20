@@ -42,7 +42,8 @@ MANIFEST
 # VIRTUAL ENVIRONMENTS
 # ========================
 */.env
-*/.venv
+proyecto_prob/proyecto_ia_probabilistica/.venv
+*.venv_emma
 */env/
 */venv/
 */ENV/
