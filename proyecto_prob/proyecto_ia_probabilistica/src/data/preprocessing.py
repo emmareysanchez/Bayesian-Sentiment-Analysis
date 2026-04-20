@@ -52,9 +52,8 @@ BERT_BATCH_SIZE = 64
 BERT_MAX_LENGTH = 256
 
 AD_HOC_STOPWORDS = {
-    "monroe", "stanwyck", "barrymore", "grinch", "kelly", "ritchie", 
+    "monroe", "stanwyck", "barrymore", "grinch", "kelly", "ritchie",
     "al", "gore", "global", "warming", "columbo", "orson", "welles",
-    "movie", "film", "film", "story", "character", "actor", "scene"
 }
 
 TFIDF_CONFIG = dict(
@@ -441,10 +440,10 @@ def main():
     p.add_argument("--ood-size-per-source", type=int, default=2000)
     p.add_argument("--val-size", type=float, default=0.10)
     p.add_argument("--test-size", type=float, default=0.10)
-    p.add_argument("--label-noise", type=float, default=0.10)
-    p.add_argument("--missing-rate", type=float, default=0.05)
-    p.add_argument("--typo-doc-rate", type=float, default=0.08)
-    p.add_argument("--minority-ratio", type=float, default=0.25,
+    p.add_argument("--label-noise", type=float, default=0.0)
+    p.add_argument("--missing-rate", type=float, default=0.0)
+    p.add_argument("--typo-doc-rate", type=float, default=0.0)
+    p.add_argument("--minority-ratio", type=float, default=0.5,
                    help="Positive = minority_ratio * negative in train")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--skip-bert", action="store_true",
