@@ -56,7 +56,7 @@ N_EACH = 5
 # Speed / robustness knobs.
 # For a demo, using the best seed per model is usually enough and much faster.
 USE_BEST_SEED_ONLY = True
-MC_SAMPLES = 20
+MC_SAMPLES = 80
 BERT_BATCH_SIZE = 128
 INFER_BATCH_SIZE = 512
 FORCE_REBUILD_CACHE = False
