@@ -1,0 +1,11 @@
+{
+  "model": "bnn_moe_hetero_transfer",
+  "train_seed": 42,
+  "transfer_seed": 42,
+  "epochs": 30,
+  "batch_size": 64,
+  "hidden_dim": 128,
+  "lr": 0.0001,
+  "n_topics": 10,
+  "mc_samples": 100
+}

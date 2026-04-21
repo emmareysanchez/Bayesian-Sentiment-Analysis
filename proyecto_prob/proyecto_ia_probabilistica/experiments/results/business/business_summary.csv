@@ -1,3 +1,0 @@
-mean_avg_cost_at_star,mean_rejection_rate,mean_savings_pct,mean_tau_star,model,n_seeds,score
-0.1476,0.613,67.72594752186589,0.320951737351154,bnn_base,1,predictive_entropy
-0.1851666666666667,0.8958333333333334,79.93292333533246,0.1291593040154008,bnn_moe,3,predictive_entropy

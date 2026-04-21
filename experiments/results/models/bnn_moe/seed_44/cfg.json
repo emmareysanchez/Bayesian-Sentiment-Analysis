@@ -1,0 +1,11 @@
+{
+  "model": "bnn_moe",
+  "seed": 44,
+  "epochs": 50,
+  "batch_size": 64,
+  "hidden_dim": 128,
+  "lr": 0.001,
+  "prior_std": 1.0,
+  "n_topics": 10,
+  "mc_samples": 100
+}
